@@ -21,9 +21,9 @@ libusb:
 	$(RM) payload_A9.h payload_notA9.h payload_notA9_armv7.h payload_handle_checkm8_request.h payload_handle_checkm8_request_armv7.h
 
 ios:
-	mkdir headers
-	ln -s $(shell xcrun -sdk macosx -show-sdk-path)/usr/include/libkern headers
-	ln -s $(shell xcrun -sdk macosx -show-sdk-path)/System/Library/Frameworks/IOKit.framework/Headers headers/IOKit
+	mkdir -p headers
+	ln -sfn $(shell xcrun -sdk macosx -show-sdk-path)/usr/include/libkern headers/libkern
+	ln -sfn $(shell xcrun -sdk macosx -show-sdk-path)/System/Library/Frameworks/IOKit.framework/Headers headers/IOKit
 	xxd -iC payload_A9.bin payload_A9.h
 	xxd -iC payload_notA9.bin payload_notA9.h
 	xxd -iC payload_notA9_armv7.bin payload_notA9_armv7.h
@@ -52,3 +52,5 @@ payload:
 
 clean:
 	$(RM) gaster
+	$(RM) payload_A9.h payload_notA9.h payload_notA9_armv7.h payload_handle_checkm8_request.h payload_handle_checkm8_request_armv7.h
+	$(RM) -r headers

@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 #include "lzfse.h"
+#include <ctype.h>
 #ifdef HAVE_LIBUSB
 #	include <libusb-1.0/libusb.h>
 #	include <openssl/evp.h>
@@ -1505,6 +1506,11 @@ gaster_aes(usb_handle_t *handle, uint32_t cmd, const uint8_t *src, uint8_t *dst,
 	size_t data_sz;
 	uint64_t r;
 
+	/* data[] below is DFU_MAX_TRANSFER_SZ; callers pass 48 today, but never
+	 * let a future caller overflow the stack buffer. */
+	if(len > DFU_MAX_TRANSFER_SZ - (sizeof(exec_cmd) - sizeof(r))) {
+		return false;
+	}
 	if(cpid == 0x8960 || cpid == 0x7001 || cpid == 0x7000 || cpid == 0x8003 || cpid == 0x8000 || cpid == 0x8001 || cpid == 0x8010 || cpid == 0x8011 || cpid == 0x8015 || cpid == 0x8012) {
 		exec_cmd.magic = EXEC_MAGIC;
 		exec_cmd.func = aes_crypto_cmd;
@@ -1565,16 +1571,27 @@ gaster_decrypt(usb_handle_t *handle, const uint8_t *src, size_t src_len, uint8_t
 static bool
 gaster_decrypt_kbag(usb_handle_t *handle, const char *kbag_str) {
 	uint8_t kbag[AES_BLOCK_SZ + AES_KEY_SZ_BYTES_256];
-	bool ret = false;
+	bool ret = false, kbag_valid = false;
 	size_t i;
 
 	if(strlen(kbag_str) == 2 * sizeof(kbag)) {
-		for(i = 0; i < sizeof(kbag); ++i) {
-			if(sscanf(&kbag_str[2 * i], "%02" SCNx8, &kbag[i]) != 1) {
+		/* sscanf %x skips leading whitespace, so validate every char as hex
+		 * first; otherwise a spaced string would parse misaligned. */
+		kbag_valid = true;
+		for(i = 0; i < 2 * sizeof(kbag); ++i) {
+			if(!isxdigit((unsigned char)kbag_str[i])) {
+				kbag_valid = false;
 				break;
 			}
 		}
-		if(i == sizeof(kbag) && gaster_checkm8(handle) && gaster_aes(handle, AES_CMD_CBC | AES_CMD_DEC, kbag, kbag, sizeof(kbag), AES_KEY_SZ_256 | AES_KEY_TYPE_GID0)) {
+		if(kbag_valid) {
+			for(i = 0; i < sizeof(kbag); ++i) {
+				if(sscanf(&kbag_str[2 * i], "%02" SCNx8, &kbag[i]) != 1) {
+					break;
+				}
+			}
+		}
+		if(kbag_valid && i == sizeof(kbag) && gaster_checkm8(handle) && gaster_aes(handle, AES_CMD_CBC | AES_CMD_DEC, kbag, kbag, sizeof(kbag), AES_KEY_SZ_256 | AES_KEY_TYPE_GID0)) {
 			printf("IV: ");
 			for(i = 0; i < AES_BLOCK_SZ; ++i) {
 				printf("%02" PRIX8, kbag[i]);
